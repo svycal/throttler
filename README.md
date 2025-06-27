@@ -85,6 +85,28 @@ end
 
 All logic is wrapped in a Postgres transaction and uses `SELECT FOR UPDATE` to prevent race conditions across parallel processes or nodes.
 
+### ⚠️ Important: Avoid Nested Transactions
+
+The `throttle` block is already wrapped in a database transaction. **Do not use `Repo.transaction` inside the throttle callback**, as nested transactions can produce unexpected results:
+
+```elixir
+# ❌ AVOID THIS
+throttle "user_123", "notification", max_per: [{1, :hour}] do
+  Repo.transaction(fn ->
+    # This creates a nested transaction - don't do this!
+    send_notification()
+  end)
+end
+
+# ✅ DO THIS INSTEAD
+throttle "user_123", "notification", max_per: [{1, :hour}] do
+  # Your code runs inside a transaction already
+  send_notification()
+end
+```
+
+If you need to perform additional database operations, they will automatically be part of the same transaction and will be rolled back if an exception occurs.
+
 ## Formatter Configuration
 
 Throttler exports formatter rules for the `throttle` macro. If you're using Throttler in your project and want parentheses-free formatting, add this to your `.formatter.exs`:
