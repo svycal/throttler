@@ -170,7 +170,7 @@ defmodule MyApp.ThrottlerCleanupJob do
   @impl Oban.Worker
   def perform(_job) do
     # Clean up events older than 30 days
-    deleted_count = Throttler.cleanup_old_events(MyApp.Repo, days: 30)
+    deleted_count = Throttler.cleanup_old_events(days: 30)
     {:ok, %{deleted_events: deleted_count}}
   end
 end

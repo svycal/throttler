@@ -1,7 +1,9 @@
 defmodule ThrottlerCleanupTest do
   use Throttler.DataCase
 
-  describe "Throttler.cleanup_old_events/2 (DateTime cutoff)" do
+  alias Throttler.TestRepo
+
+  describe "Throttler.cleanup_old_events (DateTime cutoff)" do
     test "deletes events older than cutoff time" do
       now = DateTime.utc_now()
 
@@ -26,7 +28,7 @@ defmodule ThrottlerCleanupTest do
       cutoff = DateTime.add(now, -24 * 60 * 60, :second)
 
       # Clean up old events
-      count = Throttler.cleanup_old_events(TestRepo, cutoff)
+      count = Throttler.cleanup_old_events(cutoff, repo: TestRepo)
 
       # Should have deleted 1 event (the 48-hour old one)
       assert count == 1
@@ -41,12 +43,12 @@ defmodule ThrottlerCleanupTest do
       cutoff = DateTime.add(now, -24 * 60 * 60, :second)
 
       # No events in database
-      count = Throttler.cleanup_old_events(TestRepo, cutoff)
+      count = Throttler.cleanup_old_events(cutoff, repo: TestRepo)
       assert count == 0
     end
   end
 
-  describe "Throttler.cleanup_old_events/2 (keyword options)" do
+  describe "Throttler.cleanup_old_events (keyword options)" do
     test "cleans up events using keyword options" do
       now = DateTime.utc_now()
 
@@ -69,7 +71,7 @@ defmodule ThrottlerCleanupTest do
         })
 
       # Clean up events older than 7 days
-      count = Throttler.cleanup_old_events(TestRepo, days: 7)
+      count = Throttler.cleanup_old_events(repo: TestRepo, days: 7)
 
       # Should have deleted the 8-day old event
       assert count == 1
@@ -79,7 +81,7 @@ defmodule ThrottlerCleanupTest do
 
     test "uses default of 7 days when no options provided" do
       # This test ensures the default behavior works
-      count = Throttler.cleanup_old_events(TestRepo, [])
+      count = Throttler.cleanup_old_events(repo: TestRepo)
       # Should not error
       assert count >= 0
     end

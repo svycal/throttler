@@ -185,6 +185,132 @@ defmodule ThrottlerTest do
     end
   end
 
+  describe "global repo configuration" do
+    defmodule GlobalRepoModule do
+      @moduledoc false
+      use Throttler
+
+      def send_with_throttle(scope, key, opts) do
+        throttle scope, key, opts do
+          {:executed, System.system_time(:millisecond)}
+        end
+      end
+    end
+
+    setup do
+      # Store original config
+      original_config = Application.get_env(:throttler, :repo)
+
+      # Set global repo config
+      Application.put_env(:throttler, :repo, Throttler.TestRepo)
+
+      on_exit(fn ->
+        # Restore original config
+        if original_config do
+          Application.put_env(:throttler, :repo, original_config)
+        else
+          Application.delete_env(:throttler, :repo)
+        end
+      end)
+
+      :ok
+    end
+
+    test "uses globally configured repo when no repo specified in use" do
+      result =
+        GlobalRepoModule.send_with_throttle("global_user", "test_event", max_per: [hour: 1])
+
+      assert {:ok, :sent} = result
+
+      # Verify event was created
+      event = TestRepo.get_by(Throttler.Schema.Event, scope: "global_user", key: "test_event")
+      assert event != nil
+    end
+
+    test "cleanup_old_events uses global repo when not specified" do
+      now = DateTime.utc_now()
+      old_time = DateTime.add(now, -8, :day)
+
+      # Insert an old event
+      TestRepo.insert!(%Throttler.Schema.Event{
+        scope: "cleanup_test",
+        key: "old_event",
+        sent_at: old_time
+      })
+
+      # Clean up using global config
+      count = Throttler.cleanup_old_events(days: 7)
+      assert count == 1
+
+      # Verify event was deleted
+      assert nil ==
+               TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_test", key: "old_event")
+    end
+
+    test "cleanup_old_events accepts repo in opts" do
+      now = DateTime.utc_now()
+      old_time = DateTime.add(now, -8, :day)
+
+      # Insert an old event
+      TestRepo.insert!(%Throttler.Schema.Event{
+        scope: "cleanup_test2",
+        key: "old_event",
+        sent_at: old_time
+      })
+
+      # Clean up with explicit repo
+      count = Throttler.cleanup_old_events(repo: Throttler.TestRepo, days: 7)
+      assert count == 1
+
+      # Verify event was deleted
+      assert nil ==
+               TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_test2", key: "old_event")
+    end
+
+    test "cleanup_old_events with DateTime uses global repo" do
+      now = DateTime.utc_now()
+      old_time = DateTime.add(now, -8, :day)
+      cutoff = DateTime.add(now, -7, :day)
+
+      # Insert an old event
+      TestRepo.insert!(%Throttler.Schema.Event{
+        scope: "cleanup_test3",
+        key: "old_event",
+        sent_at: old_time
+      })
+
+      # Clean up using global config
+      count = Throttler.cleanup_old_events(cutoff)
+      assert count == 1
+    end
+
+    test "cleanup_old_events with DateTime accepts repo in opts" do
+      now = DateTime.utc_now()
+      old_time = DateTime.add(now, -8, :day)
+      cutoff = DateTime.add(now, -7, :day)
+
+      # Insert an old event
+      TestRepo.insert!(%Throttler.Schema.Event{
+        scope: "cleanup_test4",
+        key: "old_event",
+        sent_at: old_time
+      })
+
+      # Clean up with explicit repo
+      count = Throttler.cleanup_old_events(cutoff, repo: Throttler.TestRepo)
+      assert count == 1
+    end
+
+    test "raises helpful error when no repo configured" do
+      # Clear the global config
+      Application.delete_env(:throttler, :repo)
+
+      assert_raise RuntimeError, ~r/No repo configured for Throttler/, fn ->
+        Throttler.get_repo()
+      end
+    end
+  end
+
   describe "event tracking" do
     test "creates event record on successful send" do
       count_before = TestRepo.aggregate(Throttler.Schema.Event, :count)

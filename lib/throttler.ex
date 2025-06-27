@@ -5,8 +5,27 @@ defmodule Throttler do
 
   ## Usage
 
+  You can configure the repo at the module level:
+
       defmodule MyApp.Notifications do
         use Throttler, repo: MyApp.Repo
+
+        def maybe_send_digest(scope) do
+          throttle scope, "digest", max_per: [hour: 1, day: 3] do
+            send_digest_email(scope)
+          end
+        end
+      end
+
+  Or configure it globally in your application config:
+
+      # config/config.exs
+      config :throttler, repo: MyApp.Repo
+
+  Then use Throttler without specifying the repo:
+
+      defmodule MyApp.Notifications do
+        use Throttler
 
         def maybe_send_digest(scope) do
           throttle scope, "digest", max_per: [hour: 1, day: 3] do
@@ -17,12 +36,20 @@ defmodule Throttler do
   """
 
   defmacro __using__(opts) do
-    repo = Keyword.fetch!(opts, :repo)
+    repo = Keyword.get(opts, :repo)
 
-    quote bind_quoted: [repo: repo] do
-      import Throttler, only: [throttle: 4]
+    if repo do
+      quote bind_quoted: [repo: repo] do
+        import Throttler, only: [throttle: 4]
 
-      defp throttler_repo, do: unquote(repo)
+        defp throttler_repo, do: unquote(repo)
+      end
+    else
+      quote do
+        import Throttler, only: [throttle: 4]
+
+        defp throttler_repo, do: Throttler.get_repo()
+      end
     end
   end
 
@@ -39,35 +66,87 @@ defmodule Throttler do
   end
 
   @doc """
+  Returns the globally configured repo for Throttler.
+
+  The repo can be configured in your application config:
+
+      config :throttler, repo: MyApp.Repo
+
+  If no repo is configured, this function will raise an error.
+  """
+  def get_repo do
+    case Application.get_env(:throttler, :repo) do
+      nil ->
+        raise """
+        No repo configured for Throttler.
+
+        Please configure a repo in your config:
+
+            config :throttler, repo: MyApp.Repo
+
+        Or specify it when using Throttler:
+
+            use Throttler, repo: MyApp.Repo
+        """
+
+      repo ->
+        repo
+    end
+  end
+
+  @doc """
   Cleans up old throttle events that are no longer needed.
 
   This function should be called periodically to prevent the throttler_events
   table from growing unbounded. You can run this as a background job or
   scheduled task.
 
+  ## Options
+
+    * `:repo` - The Ecto repo to use. If not provided, uses the globally configured repo.
+    * `:days` - Number of days to keep events
+    * `:hours` - Number of hours to keep events
+    * `:minutes` - Number of minutes to keep events
+
   ## Examples
 
       # In a Phoenix application, you might run this daily:
       defmodule MyApp.CleanupJob do
         def perform do
-          Throttler.cleanup_old_events(MyApp.Repo, days: 7)
+          # Using explicit repo
+          Throttler.cleanup_old_events(repo: MyApp.Repo, days: 7)
+          
+          # Using global repo configuration
+          Throttler.cleanup_old_events(days: 7)
         end
       end
 
       # Clean up events older than specific time periods:
-      Throttler.cleanup_old_events(MyApp.Repo, days: 30)
-      Throttler.cleanup_old_events(MyApp.Repo, hours: 48)
+      Throttler.cleanup_old_events(repo: MyApp.Repo, days: 30)
+      Throttler.cleanup_old_events(hours: 48)  # uses global repo
 
       # Clean up events older than a specific time:
       cutoff = DateTime.add(DateTime.utc_now(), -7, :day)
-      Throttler.cleanup_old_events(MyApp.Repo, cutoff)
+      Throttler.cleanup_old_events(cutoff)
+      Throttler.cleanup_old_events(cutoff, repo: MyApp.Repo)
   """
-  def cleanup_old_events(repo, opts) when is_list(opts) do
+  def cleanup_old_events(opts) when is_list(opts) do
+    {repo, opts} = Keyword.pop(opts, :repo)
+    repo = repo || get_repo()
     cutoff = calculate_cutoff_from_opts(opts)
-    cleanup_old_events(repo, cutoff)
+    do_cleanup_old_events(repo, cutoff)
   end
 
-  def cleanup_old_events(repo, %DateTime{} = cutoff_time) do
+  def cleanup_old_events(%DateTime{} = cutoff_time) do
+    do_cleanup_old_events(get_repo(), cutoff_time)
+  end
+
+  def cleanup_old_events(%DateTime{} = cutoff_time, opts) when is_list(opts) do
+    repo = Keyword.get(opts, :repo) || get_repo()
+    do_cleanup_old_events(repo, cutoff_time)
+  end
+
+  defp do_cleanup_old_events(repo, %DateTime{} = cutoff_time) do
     import Ecto.Query
 
     {count, _} =
