@@ -1,0 +1,89 @@
+version: 2.1
+
+jobs:
+  test:
+    docker:
+      - image: cimg/elixir:1.17-erlang-26.2.1
+      - image: cimg/postgres:15.6
+
+    environment:
+      MIX_ENV: test
+    
+    steps:
+      - checkout
+      
+      # Restore dependency cache
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "mix.lock" }}
+            - v1-deps-
+      
+      # Install dependencies
+      - run:
+          name: Install dependencies
+          command: mix deps.get
+      
+      # Save dependency cache
+      - save_cache:
+          key: v1-deps-{{ checksum "mix.lock" }}
+          paths:
+            - deps
+            - _build
+            - ~/.mix
+            - ~/.hex
+      
+      # Compile (warnings as errors in CI)
+      - run:
+          name: Compile
+          command: mix compile --warnings-as-errors
+      
+      # Run tests
+      - run:
+          name: Run tests
+          command: mix test
+
+  lint:
+    docker:
+      - image: cimg/elixir:1.17-erlang-26.2.1
+    
+    environment:
+      MIX_ENV: test
+    
+    steps:
+      - checkout
+      
+      # Restore dependency cache
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "mix.lock" }}
+            - v1-deps-
+      
+      # Install dependencies  
+      - run:
+          name: Install dependencies
+          command: mix deps.get
+      
+      # Save dependency cache
+      - save_cache:
+          key: v1-deps-{{ checksum "mix.lock" }}
+          paths:
+            - deps
+            - _build
+            - ~/.mix
+            - ~/.hex
+      
+      # Check formatting
+      - run:
+          name: Check formatting
+          command: mix format --check-formatted
+      
+      # Run credo
+      - run:
+          name: Run credo
+          command: mix credo
+
+workflows:
+  test_and_lint:
+    jobs:
+      - test
+      - lint
