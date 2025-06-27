@@ -1,18 +1,40 @@
 defmodule Throttler do
   @moduledoc """
-  Documentation for `Throttler`.
+  A lightweight DSL for enforcing general throttling policies, such as controlling
+  notification frequency.
+
+  ## Usage
+
+      defmodule MyApp.Notifications do
+        use Throttler, repo: MyApp.Repo
+
+        def maybe_send_digest(scope) do
+          throttle scope, "digest", max_per: [{1, :hour}, {3, :day}] do
+            send_digest_email(scope)
+          end
+        end
+      end
   """
 
-  @doc """
-  Hello world.
+  defmacro __using__(opts) do
+    repo = Keyword.fetch!(opts, :repo)
 
-  ## Examples
+    quote bind_quoted: [repo: repo] do
+      import Throttler, only: [throttle: 3, throttle: 4]
 
-      iex> Throttler.hello()
-      :world
+      defp throttler_repo, do: unquote(repo)
+    end
+  end
 
-  """
-  def hello do
-    :world
+  defmacro throttle(scope, key, opts, do: block) do
+    quote do
+      Throttler.Policy.run(
+        throttler_repo(),
+        unquote(scope),
+        unquote(key),
+        unquote(opts),
+        fn -> unquote(block) end
+      )
+    end
   end
 end

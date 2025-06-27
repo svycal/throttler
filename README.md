@@ -1,11 +1,20 @@
 # Throttler
 
-**TODO: Add description**
+Throttler is a lightweight Elixir DSL for rate-limiting events across arbitrary `scope` and `key` combinations — perfect for throttling notification delivery, message sends, job dispatches, and more.
+
+Backed by Postgres and Ecto, it guarantees **race-safety** using `SELECT FOR UPDATE`, making it ideal for distributed or concurrent systems.
+
+## Features
+
+- ✅ Declarative throttling with a clean DSL
+- ✅ Race-safe via Postgres locking
+- ✅ Time-window enforcement (e.g., once per hour, max 3 per day)
+- ✅ General-purpose: use it for email, SMS, alerts, tasks, etc.
+- ✅ Built with plain Ecto — no special dependencies
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `throttler` to your list of dependencies in `mix.exs`:
+Add to your `mix.exs`:
 
 ```elixir
 def deps do
@@ -15,7 +24,67 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/throttler>.
+## Schema Migrations
 
+```elixir
+create table(:throttler_throttles) do
+  add :scope, :string, null: false
+  add :key, :string, null: false
+  add :last_sent_at, :utc_datetime_usec
+  timestamps()
+end
+
+create unique_index(:throttler_throttles, [:scope, :key])
+
+create table(:throttler_events) do
+  add :scope, :string, null: false
+  add :key, :string, null: false
+  add :sent_at, :utc_datetime_usec
+end
+
+create index(:throttler_events, [:scope, :key])
+```
+
+## Usage
+
+### 1. Use the DSL in your module:
+
+```elixir
+defmodule MyApp.Notifications do
+  use Throttler, repo: MyApp.Repo
+
+  def maybe_send(scope) do
+    throttle scope, "weekly_digest", max_per: [{1, :hour}, {3, :day}] do
+      MyMailer.send_digest(scope)
+    end
+  end
+end
+```
+
+### 2. Handle the result:
+
+```elixir
+case MyApp.Notifications.maybe_send("user_123") do
+  {:ok, :sent} -> :ok
+  {:error, :throttled} -> :skip
+  {:error, {:exception, e}} -> report_exception(e)
+end
+```
+
+## Safety
+
+All logic is wrapped in a Postgres transaction and uses `SELECT FOR UPDATE` to prevent race conditions across parallel processes or nodes.
+
+## Customization
+
+You can use any string for `scope` and `key`. Examples:
+
+| Use Case          | Scope           | Key                      |
+| ----------------- | --------------- | ------------------------ |
+| Email throttling  | `"user_123"`    | `"appointment_reminder"` |
+| Push notification | `"device:abc"`  | `"low_battery"`          |
+| Job dispatch      | `"customer:42"` | `"export:csv"`           |
+
+## Contributing
+
+PRs welcome! This project is small, fast, and designed to be easy to understand.

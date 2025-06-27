@@ -1,0 +1,88 @@
+defmodule Throttler.Policy do
+  import Ecto.Query
+
+  def run(repo, scope, key, opts, fun) do
+    max_per = Keyword.fetch!(opts, :max_per)
+
+    repo.transaction(fn ->
+      throttle = get_or_create_throttle!(repo, scope, key)
+
+      throttle = from(t in throttle_query(scope, key), lock: "FOR UPDATE") |> repo.one!()
+
+      now = DateTime.utc_now()
+      recent = fetch_recent_events(repo, scope, key, max_per)
+
+      if allowed_to_send?(now, recent, max_per) do
+        repo.insert!(%Throttler.Schema.Event{
+          scope: scope,
+          key: key,
+          sent_at: now
+        })
+
+        repo.update!(Ecto.Changeset.change(throttle, last_sent_at: now))
+
+        try do
+          fun.()
+          {:ok, :sent}
+        rescue
+          e -> repo.rollback({:exception, e})
+        end
+      else
+        repo.rollback(:throttled)
+      end
+    end)
+  end
+
+  defp get_or_create_throttle!(repo, scope, key) do
+    repo.insert!(
+      %Throttler.Schema.Throttle{
+        scope: scope,
+        key: key,
+        last_sent_at: nil
+      },
+      on_conflict: :nothing,
+      conflict_target: [:scope, :key]
+    )
+
+    throttle_query(scope, key) |> repo.one!()
+  end
+
+  defp throttle_query(scope, key) do
+    from(t in Throttler.Schema.Throttle,
+      where: t.scope == ^scope and t.key == ^key
+    )
+  end
+
+  defp fetch_recent_events(repo, scope, key, limits) do
+    now = DateTime.utc_now()
+
+    windows =
+      Enum.map(limits, fn {n, unit} ->
+        {n, unit, DateTime.add(now, -to_seconds(unit, n), :second)}
+      end)
+
+    from(e in Throttler.Schema.Event,
+      where: e.scope == ^scope and e.key == ^key,
+      where:
+        dynamic(
+          ^Enum.reduce(windows, false, fn {_, _, cutoff}, acc ->
+            dynamic([e], e.sent_at > ^cutoff or ^acc)
+          end)
+        ),
+      select: e.sent_at
+    )
+    |> repo.all()
+  end
+
+  defp allowed_to_send?(now, timestamps, limits) do
+    Enum.all?(limits, fn {max_count, unit} ->
+      cutoff = DateTime.add(now, -to_seconds(unit), :second)
+      count = Enum.count(timestamps, &(DateTime.compare(&1, cutoff) == :gt))
+      count < max_count
+    end)
+  end
+
+  defp to_seconds(:minute, n \\ 1), do: n * 60
+  defp to_seconds(:hour, n \\ 1), do: n * 3_600
+  defp to_seconds(:day, n \\ 1), do: n * 86_400
+end
