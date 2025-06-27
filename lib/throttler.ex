@@ -65,20 +65,69 @@ defmodule Throttler do
   """
   def cleanup_old_events(repo, opts) when is_list(opts) do
     cutoff = calculate_cutoff_from_opts(opts)
-    Throttler.Policy.cleanup_old_events(repo, cutoff)
+    cleanup_old_events(repo, cutoff)
   end
 
   def cleanup_old_events(repo, cutoff_time) when is_struct(cutoff_time, DateTime) do
-    Throttler.Policy.cleanup_old_events(repo, cutoff_time)
+    import Ecto.Query
+    
+    {count, _} = 
+      from(e in Throttler.Schema.Event, where: e.sent_at < ^cutoff_time)
+      |> repo.delete_all()
+    
+    count
+  end
+
+  @doc """
+  Cleans up old events for a specific scope and key combination.
+  
+  Deletes events older than the specified cutoff time for the given scope/key.
+  Useful for targeted cleanup when you know specific throttles are no longer needed.
+  
+  ## Examples
+  
+      # Clean up old events for a specific user's notifications
+      cutoff = DateTime.add(DateTime.utc_now(), -7 * 24 * 60 * 60, :second)
+      Throttler.cleanup_old_events(MyApp.Repo, "user_123", "daily_report", cutoff)
+      
+  Returns the number of deleted records.
+  """
+  def cleanup_old_events(repo, scope, key, cutoff_time) do
+    import Ecto.Query
+    
+    {count, _} = 
+      from(e in Throttler.Schema.Event, 
+           where: e.scope == ^scope and e.key == ^key and e.sent_at < ^cutoff_time)
+      |> repo.delete_all()
+    
+    count
   end
 
   @doc """
   Calculates a safe cutoff time for cleanup based on configured limits.
-
-  See `Throttler.Policy.calculate_safe_cutoff/1` for more details.
+  
+  Returns a DateTime before which all events can be safely deleted without 
+  affecting throttling decisions. Adds a 24-hour buffer for safety.
+  
+  ## Examples
+  
+      limits = [hour: 1, day: 3]
+      cutoff = Throttler.calculate_safe_cutoff(limits)
+      Throttler.cleanup_old_events(MyApp.Repo, cutoff)
   """
   def calculate_safe_cutoff(limits) do
-    Throttler.Policy.calculate_safe_cutoff(limits)
+    now = DateTime.utc_now()
+    
+    # Find the longest time window and add a 24-hour buffer
+    longest_seconds = 
+      limits
+      |> Enum.map(fn {unit, n} -> to_seconds(unit, 1) * n end)
+      |> Enum.max()
+    
+    # Add 24-hour buffer (86400 seconds) for safety
+    buffer_seconds = longest_seconds + 86_400
+    
+    DateTime.add(now, -buffer_seconds, :second)
   end
 
   defp calculate_cutoff_from_opts(opts) do
@@ -99,4 +148,8 @@ defmodule Throttler do
         DateTime.add(now, -7 * 24 * 60 * 60, :second)
     end
   end
+
+  defp to_seconds(:minute, n), do: n * 60
+  defp to_seconds(:hour, n), do: n * 3_600
+  defp to_seconds(:day, n), do: n * 86_400
 end

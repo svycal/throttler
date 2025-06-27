@@ -1,7 +1,7 @@
 defmodule ThrottlerCleanupTest do
   use Throttler.DataCase
 
-  describe "cleanup_old_events/2" do
+  describe "Throttler.cleanup_old_events/2" do
     test "deletes events older than cutoff time" do
       now = DateTime.utc_now()
 
@@ -26,7 +26,7 @@ defmodule ThrottlerCleanupTest do
       cutoff = DateTime.add(now, -24 * 60 * 60, :second)
 
       # Clean up old events
-      count = Throttler.Policy.cleanup_old_events(TestRepo, cutoff)
+      count = Throttler.cleanup_old_events(TestRepo, cutoff)
 
       # Should have deleted 1 event (the 48-hour old one)
       assert count == 1
@@ -41,12 +41,12 @@ defmodule ThrottlerCleanupTest do
       cutoff = DateTime.add(now, -24 * 60 * 60, :second)
 
       # No events in database
-      count = Throttler.Policy.cleanup_old_events(TestRepo, cutoff)
+      count = Throttler.cleanup_old_events(TestRepo, cutoff)
       assert count == 0
     end
   end
 
-  describe "cleanup_old_events/4" do
+  describe "Throttler.cleanup_old_events/4" do
     test "deletes old events for specific scope and key only" do
       now = DateTime.utc_now()
       old_time = DateTime.add(now, -48 * 60 * 60, :second)
@@ -75,7 +75,7 @@ defmodule ThrottlerCleanupTest do
         })
 
       # Clean up old events for specific scope/key
-      count = Throttler.Policy.cleanup_old_events(TestRepo, "user_1", "notification", cutoff)
+      count = Throttler.cleanup_old_events(TestRepo, "user_1", "notification", cutoff)
 
       # Should have deleted only 1 event
       assert count == 1
@@ -87,10 +87,10 @@ defmodule ThrottlerCleanupTest do
     end
   end
 
-  describe "calculate_safe_cutoff/1" do
+  describe "Throttler.calculate_safe_cutoff/1 (Policy level)" do
     test "calculates cutoff based on longest time window with buffer" do
       limits = [hour: 2, day: 1]
-      cutoff = Throttler.Policy.calculate_safe_cutoff(limits)
+      cutoff = Throttler.calculate_safe_cutoff(limits)
 
       now = DateTime.utc_now()
 
@@ -105,7 +105,7 @@ defmodule ThrottlerCleanupTest do
 
     test "handles single limit correctly" do
       limits = [hour: 6]
-      cutoff = Throttler.Policy.calculate_safe_cutoff(limits)
+      cutoff = Throttler.calculate_safe_cutoff(limits)
 
       now = DateTime.utc_now()
 
@@ -119,7 +119,7 @@ defmodule ThrottlerCleanupTest do
     end
   end
 
-  describe "Throttler.cleanup_old_events/2" do
+  describe "Throttler.cleanup_old_events/2 (keyword options)" do
     test "cleans up events using keyword options" do
       now = DateTime.utc_now()
 
@@ -158,7 +158,7 @@ defmodule ThrottlerCleanupTest do
     end
   end
 
-  describe "Throttler.calculate_safe_cutoff/1" do
+  describe "Throttler.calculate_safe_cutoff/1 (public API)" do
     test "calculates safe cutoff for given limits" do
       limits = [hour: 1, day: 3]
       cutoff = Throttler.calculate_safe_cutoff(limits)
