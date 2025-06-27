@@ -19,16 +19,16 @@ defmodule ThrottlerTest do
 
   describe "basic throttling" do
     test "allows first execution" do
-      result = TestModule.send_with_throttle("user_1", "test_event", max_per: [{1, :hour}])
+      result = TestModule.send_with_throttle("user_1", "test_event", max_per: [hour: 1])
       assert {:ok, :sent} = result
     end
 
     test "throttles second execution within time window" do
       assert {:ok, :sent} =
-               TestModule.send_with_throttle("user_2", "test_event", max_per: [{1, :hour}])
+               TestModule.send_with_throttle("user_2", "test_event", max_per: [hour: 1])
 
       assert {:error, :throttled} =
-               TestModule.send_with_throttle("user_2", "test_event", max_per: [{1, :hour}])
+               TestModule.send_with_throttle("user_2", "test_event", max_per: [hour: 1])
     end
 
     test "allows execution after time window expires" do
@@ -45,30 +45,30 @@ defmodule ThrottlerTest do
 
       # Should allow execution since past the 1 hour window
       assert {:ok, :sent} =
-               TestModule.send_with_throttle("user_3", "test_event", max_per: [{1, :hour}])
+               TestModule.send_with_throttle("user_3", "test_event", max_per: [hour: 1])
     end
 
     test "tracks throttles per scope and key combination" do
       # Different scopes should not interfere
       assert {:ok, :sent} =
-               TestModule.send_with_throttle("user_4", "event_a", max_per: [{1, :hour}])
+               TestModule.send_with_throttle("user_4", "event_a", max_per: [hour: 1])
 
       assert {:ok, :sent} =
-               TestModule.send_with_throttle("user_5", "event_a", max_per: [{1, :hour}])
+               TestModule.send_with_throttle("user_5", "event_a", max_per: [hour: 1])
 
       # Different keys should not interfere
       assert {:ok, :sent} =
-               TestModule.send_with_throttle("user_4", "event_b", max_per: [{1, :hour}])
+               TestModule.send_with_throttle("user_4", "event_b", max_per: [hour: 1])
 
       # Same scope and key should be throttled
       assert {:error, :throttled} =
-               TestModule.send_with_throttle("user_4", "event_a", max_per: [{1, :hour}])
+               TestModule.send_with_throttle("user_4", "event_a", max_per: [hour: 1])
     end
   end
 
   describe "multiple time window limits" do
     test "enforces all time window limits" do
-      opts = [max_per: [{2, :hour}, {3, :day}]]
+      opts = [max_per: [hour: 2, day: 3]]
 
       # First two should succeed (under both limits)
       assert {:ok, :sent} = TestModule.send_with_throttle("user_6", "multi_limit", opts)
@@ -96,14 +96,14 @@ defmodule ThrottlerTest do
         sent_at: DateTime.add(now, -1800, :second)
       })
 
-      opts = [max_per: [{1, :hour}, {3, :day}]]
+      opts = [max_per: [hour: 1, day: 3]]
 
       # Should be throttled due to hourly limit even though daily limit not reached
       assert {:error, :throttled} = TestModule.send_with_throttle("user_7", "multi_limit", opts)
     end
 
     test "correctly handles minute-based limits" do
-      opts = [max_per: [{2, :minute}]]
+      opts = [max_per: [minute: 2]]
 
       assert {:ok, :sent} = TestModule.send_with_throttle("user_8", "minute_test", opts)
       assert {:ok, :sent} = TestModule.send_with_throttle("user_8", "minute_test", opts)
@@ -117,7 +117,7 @@ defmodule ThrottlerTest do
       count_before = TestRepo.aggregate(Throttler.Schema.Event, :count)
 
       # This should return error with exception
-      result = TestModule.send_with_error("user_9", "error_test", max_per: [{10, :hour}])
+      result = TestModule.send_with_error("user_9", "error_test", max_per: [hour: 10])
       assert {:error, {:exception, %RuntimeError{message: "Test error"}}} = result
 
       # Count should be unchanged
@@ -126,11 +126,11 @@ defmodule ThrottlerTest do
 
       # Should be able to try again
       assert {:ok, :sent} =
-               TestModule.send_with_throttle("user_9", "error_test", max_per: [{10, :hour}])
+               TestModule.send_with_throttle("user_9", "error_test", max_per: [hour: 10])
     end
 
     test "returns exception wrapped in error tuple" do
-      result = TestModule.send_with_error("user_10", "error_test", max_per: [{10, :hour}])
+      result = TestModule.send_with_error("user_10", "error_test", max_per: [hour: 10])
       assert {:error, {:exception, %RuntimeError{message: "Test error"}}} = result
     end
   end
@@ -139,7 +139,7 @@ defmodule ThrottlerTest do
     test "creates throttle record on first use" do
       assert nil == TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_11", key: "new_event")
 
-      TestModule.send_with_throttle("user_11", "new_event", max_per: [{1, :hour}])
+      TestModule.send_with_throttle("user_11", "new_event", max_per: [hour: 1])
 
       throttle = TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_11", key: "new_event")
       assert throttle != nil
@@ -150,14 +150,14 @@ defmodule ThrottlerTest do
 
     test "updates last_sent_at on successful send" do
       # First send
-      TestModule.send_with_throttle("user_12", "update_test", max_per: [{10, :hour}])
+      TestModule.send_with_throttle("user_12", "update_test", max_per: [hour: 10])
       throttle1 = TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_12", key: "update_test")
 
       # Wait a bit to ensure different timestamp
       Process.sleep(10)
 
       # Second send
-      TestModule.send_with_throttle("user_12", "update_test", max_per: [{10, :hour}])
+      TestModule.send_with_throttle("user_12", "update_test", max_per: [hour: 10])
       throttle2 = TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_12", key: "update_test")
 
       assert DateTime.compare(throttle2.last_sent_at, throttle1.last_sent_at) == :gt
@@ -165,7 +165,7 @@ defmodule ThrottlerTest do
 
     test "does not update last_sent_at when throttled" do
       # First send
-      TestModule.send_with_throttle("user_13", "no_update_test", max_per: [{1, :hour}])
+      TestModule.send_with_throttle("user_13", "no_update_test", max_per: [hour: 1])
 
       throttle1 =
         TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_13", key: "no_update_test")
@@ -174,7 +174,7 @@ defmodule ThrottlerTest do
       Process.sleep(10)
 
       # Second send (should be throttled)
-      TestModule.send_with_throttle("user_13", "no_update_test", max_per: [{1, :hour}])
+      TestModule.send_with_throttle("user_13", "no_update_test", max_per: [hour: 1])
 
       throttle2 =
         TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_13", key: "no_update_test")
@@ -187,7 +187,7 @@ defmodule ThrottlerTest do
     test "creates event record on successful send" do
       count_before = TestRepo.aggregate(Throttler.Schema.Event, :count)
 
-      TestModule.send_with_throttle("user_14", "track_test", max_per: [{10, :hour}])
+      TestModule.send_with_throttle("user_14", "track_test", max_per: [hour: 10])
 
       count_after = TestRepo.aggregate(Throttler.Schema.Event, :count)
       assert count_after == count_before + 1
@@ -199,11 +199,11 @@ defmodule ThrottlerTest do
 
     test "does not create event when throttled" do
       # First send creates event
-      TestModule.send_with_throttle("user_15", "no_track_test", max_per: [{1, :hour}])
+      TestModule.send_with_throttle("user_15", "no_track_test", max_per: [hour: 1])
       count1 = TestRepo.aggregate(Throttler.Schema.Event, :count)
 
       # Second send is throttled, no new event
-      TestModule.send_with_throttle("user_15", "no_track_test", max_per: [{1, :hour}])
+      TestModule.send_with_throttle("user_15", "no_track_test", max_per: [hour: 1])
       count2 = TestRepo.aggregate(Throttler.Schema.Event, :count)
 
       assert count2 == count1
@@ -235,7 +235,7 @@ defmodule ThrottlerTest do
       end)
 
       # With 1 hour and 1 day limits, should only consider last 3 events
-      opts = [max_per: [{2, :hour}, {3, :day}]]
+      opts = [max_per: [hour: 2, day: 3]]
 
       # Should succeed (2 events in last hour, limit is 2, so one more is allowed)
       assert {:ok, :sent} = TestModule.send_with_throttle("user_16", "window_test", opts)

@@ -21,7 +21,7 @@ defmodule ThrottlerConcurrentTest do
           Task.async(fn ->
             result =
               ConcurrentTestModule.send_with_throttle("concurrent_user", "race_test",
-                max_per: [{5, :hour}]
+                max_per: [hour: 5]
               )
 
             send(parent, {self(), result})
@@ -63,7 +63,7 @@ defmodule ThrottlerConcurrentTest do
 
     test "maintains consistency under concurrent load with same scope/key" do
       # Set a limit of 3 per minute
-      opts = [max_per: [{3, :minute}]]
+      opts = [max_per: [minute: 3]]
       parent = self()
 
       # Spawn 20 concurrent attempts
@@ -107,7 +107,7 @@ defmodule ThrottlerConcurrentTest do
     end
 
     test "handles concurrent access across different scopes correctly" do
-      opts = [max_per: [{1, :hour}]]
+      opts = [max_per: [hour: 1]]
       parent = self()
 
       # Create 10 different users, each trying twice
@@ -149,7 +149,7 @@ defmodule ThrottlerConcurrentTest do
     test "transaction isolation prevents double-sending" do
       # This tests that our SELECT FOR UPDATE properly locks the throttle record
       # Allow 2 per hour
-      opts = [max_per: [{2, :hour}]]
+      opts = [max_per: [hour: 2]]
 
       # First, create the throttle record with one event
       ConcurrentTestModule.send_with_throttle("isolation_user", "isolation_test", opts)

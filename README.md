@@ -64,7 +64,7 @@ defmodule MyApp.Notifications do
   use Throttler, repo: MyApp.Repo
 
   def maybe_send(scope) do
-    throttle scope, "weekly_digest", max_per: [{1, :hour}, {3, :day}] do
+    throttle scope, "weekly_digest", max_per: [hour: 1, day: 3] do
       MyMailer.send_digest(scope)
     end
   end
@@ -91,7 +91,7 @@ The `throttle` block is already wrapped in a database transaction. **Do not use 
 
 ```elixir
 # ❌ AVOID THIS
-throttle "user_123", "notification", max_per: [{1, :hour}] do
+throttle "user_123", "notification", max_per: [hour: 1] do
   Repo.transaction(fn ->
     # This creates a nested transaction - don't do this!
     send_notification()
@@ -99,7 +99,7 @@ throttle "user_123", "notification", max_per: [{1, :hour}] do
 end
 
 # ✅ DO THIS INSTEAD
-throttle "user_123", "notification", max_per: [{1, :hour}] do
+throttle "user_123", "notification", max_per: [hour: 1] do
   # Your code runs inside a transaction already
   send_notification()
 end
@@ -121,12 +121,30 @@ Throttler exports formatter rules for the `throttle` macro. If you're using Thro
 This allows you to write:
 
 ```elixir
-throttle "user_123", "daily_report", max_per: [{1, :day}] do
+throttle "user_123", "daily_report", max_per: [day: 1] do
   send_report()
 end
 ```
 
-## Customization
+## Configuration
+
+### Time Limits
+
+The `max_per` option accepts a keyword list where keys are time units and values are the maximum number of events allowed in that time period:
+
+```elixir
+max_per: [
+  minute: 5,    # Max 5 per minute
+  hour: 20,     # Max 20 per hour  
+  day: 100      # Max 100 per day
+]
+```
+
+Supported time units: `:minute`, `:hour`, `:day`
+
+The most restrictive limit will be enforced. For example, if you have `[hour: 10, day: 20]` and 10 events have already been sent in the last hour, further attempts will be throttled even if the daily limit hasn't been reached.
+
+### Scope and Key
 
 You can use any string for `scope` and `key`. Examples:
 

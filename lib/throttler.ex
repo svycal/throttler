@@ -9,7 +9,7 @@ defmodule Throttler do
         use Throttler, repo: MyApp.Repo
 
         def maybe_send_digest(scope) do
-          throttle scope, "digest", max_per: [{1, :hour}, {3, :day}] do
+          throttle scope, "digest", max_per: [hour: 1, day: 3] do
             send_digest_email(scope)
           end
         end

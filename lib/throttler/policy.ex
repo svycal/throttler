@@ -70,8 +70,8 @@ defmodule Throttler.Policy do
     now = DateTime.utc_now()
 
     windows =
-      Enum.map(limits, fn {n, unit} ->
-        {n, unit, DateTime.add(now, -(to_seconds(unit, 1) * n), :second)}
+      Enum.map(limits, fn {unit, n} ->
+        {unit, n, DateTime.add(now, -(to_seconds(unit, 1) * n), :second)}
       end)
 
     oldest_cutoff =
@@ -88,7 +88,7 @@ defmodule Throttler.Policy do
   end
 
   defp allowed_to_send?(now, timestamps, limits) do
-    Enum.all?(limits, fn {max_count, unit} ->
+    Enum.all?(limits, fn {unit, max_count} ->
       cutoff = DateTime.add(now, -to_seconds(unit, 1), :second)
       count = Enum.count(timestamps, &(DateTime.compare(&1, cutoff) == :gt))
       count < max_count
