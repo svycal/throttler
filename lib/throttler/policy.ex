@@ -4,35 +4,41 @@ defmodule Throttler.Policy do
   def run(repo, scope, key, opts, fun) do
     max_per = Keyword.fetch!(opts, :max_per)
 
-    case repo.transaction(fn ->
-           _throttle = get_or_create_throttle!(repo, scope, key)
-
-           throttle = from(t in throttle_query(scope, key), lock: "FOR UPDATE") |> repo.one!()
-
-           now = DateTime.utc_now()
-           recent = fetch_recent_events(repo, scope, key, max_per)
-
-           if allowed_to_send?(now, recent, max_per) do
-             repo.insert!(%Throttler.Schema.Event{
-               scope: scope,
-               key: key,
-               sent_at: now
-             })
-
-             repo.update!(Ecto.Changeset.change(throttle, last_sent_at: now))
-
-             try do
-               fun.()
-               {:ok, :sent}
-             rescue
-               e -> repo.rollback({:exception, e})
-             end
-           else
-             repo.rollback(:throttled)
-           end
-         end) do
+    case repo.transaction(fn -> run_throttle_check(repo, scope, key, max_per, fun) end) do
       {:ok, result} -> result
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp run_throttle_check(repo, scope, key, max_per, fun) do
+    _throttle = get_or_create_throttle!(repo, scope, key)
+
+    throttle = from(t in throttle_query(scope, key), lock: "FOR UPDATE") |> repo.one!()
+
+    now = DateTime.utc_now()
+    recent = fetch_recent_events(repo, scope, key, max_per)
+
+    if allowed_to_send?(now, recent, max_per) do
+      execute_and_record(repo, scope, key, throttle, now, fun)
+    else
+      repo.rollback(:throttled)
+    end
+  end
+
+  defp execute_and_record(repo, scope, key, throttle, now, fun) do
+    repo.insert!(%Throttler.Schema.Event{
+      scope: scope,
+      key: key,
+      sent_at: now
+    })
+
+    repo.update!(Ecto.Changeset.change(throttle, last_sent_at: now))
+
+    try do
+      fun.()
+      {:ok, :sent}
+    rescue
+      e -> repo.rollback({:exception, e})
     end
   end
 
