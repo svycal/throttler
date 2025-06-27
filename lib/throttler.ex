@@ -20,7 +20,7 @@ defmodule Throttler do
     repo = Keyword.fetch!(opts, :repo)
 
     quote bind_quoted: [repo: repo] do
-      import Throttler, only: [throttle: 3, throttle: 4]
+      import Throttler, only: [throttle: 4]
 
       defp throttler_repo, do: unquote(repo)
     end

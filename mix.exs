@@ -14,7 +14,9 @@ defmodule Throttler.MixProject do
       description:
         "A lightweight DSL for throttling events with Postgres-backed persistence and race safety.",
       docs: docs(),
-      package: package()
+      package: package(),
+      elixirc_paths: elixirc_paths(Mix.env()),
+      aliases: aliases()
     ]
   end
 
@@ -42,6 +44,7 @@ defmodule Throttler.MixProject do
     [
       {:ecto, "~> 3.0"},
       {:ecto_sql, "~> 3.0"},
+      {:postgrex, ">= 0.0.0", only: :test},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
@@ -61,5 +64,14 @@ defmodule Throttler.MixProject do
       "Changelog" => "https://github.com/svycal/throttler/blob/v#{@version}/CHANGELOG.md",
       "Readme" => "https://github.com/svycal/throttler/blob/v#{@version}/README.md"
     }
+  end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
+  defp aliases do
+    [
+      test: ["ecto.create --quiet", "ecto.migrate", "test"]
+    ]
   end
 end
