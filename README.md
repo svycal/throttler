@@ -154,6 +154,58 @@ You can use any string for `scope` and `key`. Examples:
 | Push notification | `"device:abc"`  | `"low_battery"`          |
 | Job dispatch      | `"customer:42"` | `"export:csv"`           |
 
+## Event Cleanup
+
+**Important**: The `throttler_events` table will grow over time as events are recorded. You should periodically clean up old events to prevent unbounded growth.
+
+### Automatic Cleanup
+
+Add a background job to clean up old events periodically:
+
+```elixir
+# In a Phoenix app with Oban
+defmodule MyApp.ThrottlerCleanupJob do
+  use Oban.Worker, queue: :maintenance
+
+  @impl Oban.Worker
+  def perform(_job) do
+    # Clean up events older than 30 days
+    deleted_count = Throttler.cleanup_old_events(MyApp.Repo, days: 30)
+    {:ok, %{deleted_events: deleted_count}}
+  end
+end
+
+# Schedule to run daily
+%{worker: MyApp.ThrottlerCleanupJob}
+|> Oban.insert!()
+```
+
+### Manual Cleanup Options
+
+```elixir
+# Clean up events older than specific time periods
+Throttler.cleanup_old_events(MyApp.Repo, days: 30)
+Throttler.cleanup_old_events(MyApp.Repo, hours: 48)
+Throttler.cleanup_old_events(MyApp.Repo, minutes: 120)
+
+# Calculate safe cutoff based on your actual throttle limits
+# (Adds 24-hour buffer for safety)
+limits = [hour: 1, day: 3]
+cutoff = Throttler.calculate_safe_cutoff(limits)
+Throttler.cleanup_old_events(MyApp.Repo, cutoff)
+
+# Direct cutoff time
+cutoff = DateTime.add(DateTime.utc_now(), -7 * 24 * 60 * 60, :second)
+Throttler.cleanup_old_events(MyApp.Repo, cutoff)
+```
+
+### Cleanup Strategy
+
+- Events are only needed within the **longest configured time window**
+- `calculate_safe_cutoff/1` finds your longest limit and adds a 24-hour safety buffer
+- Cleanup functions return the number of deleted records
+- Consider running cleanup daily or weekly depending on your event volume
+
 ## Contributing
 
 PRs welcome! This project is small, fast, and designed to be easy to understand.
