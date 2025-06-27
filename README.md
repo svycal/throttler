@@ -85,6 +85,25 @@ end
 
 All logic is wrapped in a Postgres transaction and uses `SELECT FOR UPDATE` to prevent race conditions across parallel processes or nodes.
 
+## Formatter Configuration
+
+Throttler exports formatter rules for the `throttle` macro. If you're using Throttler in your project and want parentheses-free formatting, add this to your `.formatter.exs`:
+
+```elixir
+[
+  import_deps: [:throttler, ...your other deps],
+  # ... rest of your formatter config
+]
+```
+
+This allows you to write:
+
+```elixir
+throttle "user_123", "daily_report", max_per: [{1, :day}] do
+  send_report()
+end
+```
+
 ## Customization
 
 You can use any string for `scope` and `key`. Examples:
