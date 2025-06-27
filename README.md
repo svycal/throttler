@@ -52,7 +52,7 @@ create table(:throttler_events) do
   add :sent_at, :utc_datetime_usec, null: false
 end
 
-create index(:throttler_events, [:scope, :key, :sent_at])
+create index(:throttler_events, [:scope, :key])
 ```
 
 ## Usage
