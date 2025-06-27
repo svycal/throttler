@@ -2,6 +2,8 @@ defmodule ThrottlerTest do
   use Throttler.DataCase
 
   defmodule TestModule do
+    @moduledoc false
+
     use Throttler, repo: Throttler.TestRepo
 
     def send_with_throttle(scope, key, opts) do
@@ -217,13 +219,13 @@ defmodule ThrottlerTest do
       # Insert events at various times
       events = [
         # 7 days ago (outside window)
-        DateTime.add(now, -86400 * 7, :second),
+        DateTime.add(now, -86_400 * 7, :second),
         # 2 days ago (inside daily window)
-        DateTime.add(now, -86400 * 2, :second),
+        DateTime.add(now, -86_400 * 2, :second),
         # 1 hour ago (inside hourly window)
-        DateTime.add(now, -3600, :second),
+        DateTime.add(now, -3_600, :second),
         # 30 minutes ago (inside all windows)
-        DateTime.add(now, -1800, :second)
+        DateTime.add(now, -1_800, :second)
       ]
 
       Enum.each(events, fn sent_at ->
