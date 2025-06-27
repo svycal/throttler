@@ -1,4 +1,6 @@
 defmodule Throttler.Schema.Throttle do
+  @moduledoc false
+
   use Ecto.Schema
 
   schema "throttler_throttles" do

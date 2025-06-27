@@ -1,4 +1,6 @@
 defmodule Throttler.Policy do
+  @moduledoc false
+
   import Ecto.Query
 
   def run(repo, scope, key, opts, fun) do

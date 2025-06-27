@@ -1,4 +1,6 @@
 defmodule Throttler.Schema.Event do
+  @moduledoc false
+
   use Ecto.Schema
 
   schema "throttler_events" do
