@@ -227,7 +227,7 @@ defmodule ThrottlerTest do
       assert event != nil
     end
 
-    test "cleanup_old_events uses global repo when not specified" do
+    test "cleanup uses global repo when not specified" do
       now = DateTime.utc_now()
       old_time = DateTime.add(now, -8, :day)
 
@@ -239,7 +239,7 @@ defmodule ThrottlerTest do
       })
 
       # Clean up using global config
-      count = Throttler.cleanup_old_events(days: 7)
+      count = Throttler.cleanup(days: 7)
       assert count == 1
 
       # Verify event was deleted
@@ -247,7 +247,7 @@ defmodule ThrottlerTest do
                TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_test", key: "old_event")
     end
 
-    test "cleanup_old_events accepts repo in opts" do
+    test "cleanup accepts repo in opts" do
       now = DateTime.utc_now()
       old_time = DateTime.add(now, -8, :day)
 
@@ -259,7 +259,7 @@ defmodule ThrottlerTest do
       })
 
       # Clean up with explicit repo
-      count = Throttler.cleanup_old_events(repo: Throttler.TestRepo, days: 7)
+      count = Throttler.cleanup(repo: Throttler.TestRepo, days: 7)
       assert count == 1
 
       # Verify event was deleted
@@ -267,7 +267,7 @@ defmodule ThrottlerTest do
                TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_test2", key: "old_event")
     end
 
-    test "cleanup_old_events with DateTime uses global repo" do
+    test "cleanup with DateTime uses global repo" do
       now = DateTime.utc_now()
       old_time = DateTime.add(now, -8, :day)
       cutoff = DateTime.add(now, -7, :day)
@@ -280,11 +280,11 @@ defmodule ThrottlerTest do
       })
 
       # Clean up using global config
-      count = Throttler.cleanup_old_events(cutoff)
+      count = Throttler.cleanup(cutoff)
       assert count == 1
     end
 
-    test "cleanup_old_events with DateTime accepts repo in opts" do
+    test "cleanup with DateTime accepts repo in opts" do
       now = DateTime.utc_now()
       old_time = DateTime.add(now, -8, :day)
       cutoff = DateTime.add(now, -7, :day)
@@ -297,7 +297,7 @@ defmodule ThrottlerTest do
       })
 
       # Clean up with explicit repo
-      count = Throttler.cleanup_old_events(cutoff, repo: Throttler.TestRepo)
+      count = Throttler.cleanup(cutoff, repo: Throttler.TestRepo)
       assert count == 1
     end
 

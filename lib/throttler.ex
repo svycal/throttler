@@ -113,40 +113,34 @@ defmodule Throttler do
       # In a Phoenix application, you might run this daily:
       defmodule MyApp.CleanupJob do
         def perform do
-          # Using explicit repo
-          Throttler.cleanup_old_events(repo: MyApp.Repo, days: 7)
-          
-          # Using global repo configuration
-          Throttler.cleanup_old_events(days: 7)
+          Throttler.cleanup(days: 7)
         end
       end
 
       # Clean up events older than specific time periods:
-      Throttler.cleanup_old_events(repo: MyApp.Repo, days: 30)
-      Throttler.cleanup_old_events(hours: 48)  # uses global repo
+      Throttler.cleanup(days: 30)
 
       # Clean up events older than a specific time:
       cutoff = DateTime.add(DateTime.utc_now(), -7, :day)
-      Throttler.cleanup_old_events(cutoff)
-      Throttler.cleanup_old_events(cutoff, repo: MyApp.Repo)
+      Throttler.cleanup(cutoff)
   """
-  def cleanup_old_events(opts) when is_list(opts) do
+  def cleanup(opts) when is_list(opts) do
     {repo, opts} = Keyword.pop(opts, :repo)
     repo = repo || get_repo()
     cutoff = calculate_cutoff_from_opts(opts)
-    do_cleanup_old_events(repo, cutoff)
+    do_cleanup(repo, cutoff)
   end
 
-  def cleanup_old_events(%DateTime{} = cutoff_time) do
-    do_cleanup_old_events(get_repo(), cutoff_time)
+  def cleanup(%DateTime{} = cutoff_time) do
+    do_cleanup(get_repo(), cutoff_time)
   end
 
-  def cleanup_old_events(%DateTime{} = cutoff_time, opts) when is_list(opts) do
+  def cleanup(%DateTime{} = cutoff_time, opts) when is_list(opts) do
     repo = Keyword.get(opts, :repo) || get_repo()
-    do_cleanup_old_events(repo, cutoff_time)
+    do_cleanup(repo, cutoff_time)
   end
 
-  defp do_cleanup_old_events(repo, %DateTime{} = cutoff_time) do
+  defp do_cleanup(repo, %DateTime{} = cutoff_time) do
     import Ecto.Query
 
     {count, _} =
