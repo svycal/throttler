@@ -34,17 +34,19 @@ defmodule Throttler.Policy do
   end
 
   defp get_or_create_throttle!(repo, scope, key) do
-    repo.insert!(
-      %Throttler.Schema.Throttle{
-        scope: scope,
-        key: key,
-        last_sent_at: nil
-      },
-      on_conflict: :nothing,
-      conflict_target: [:scope, :key]
-    )
-
-    throttle_query(scope, key) |> repo.one!()
+    case repo.insert(
+           %Throttler.Schema.Throttle{
+             scope: scope,
+             key: key,
+             last_sent_at: nil
+           },
+           on_conflict: :nothing,
+           conflict_target: [:scope, :key],
+           returning: true
+         ) do
+      {:ok, throttle} -> throttle
+      {:error, _} -> throttle_query(scope, key) |> repo.one!()
+    end
   end
 
   defp throttle_query(scope, key) do
@@ -58,17 +60,17 @@ defmodule Throttler.Policy do
 
     windows =
       Enum.map(limits, fn {n, unit} ->
-        {n, unit, DateTime.add(now, -to_seconds(unit, n), :second)}
+        {n, unit, DateTime.add(now, -(to_seconds(unit, 1) * n), :second)}
       end)
+
+    oldest_cutoff =
+      windows
+      |> Enum.map(fn {_, _, cutoff} -> cutoff end)
+      |> Enum.min(DateTime)
 
     from(e in Throttler.Schema.Event,
       where: e.scope == ^scope and e.key == ^key,
-      where:
-        dynamic(
-          ^Enum.reduce(windows, false, fn {_, _, cutoff}, acc ->
-            dynamic([e], e.sent_at > ^cutoff or ^acc)
-          end)
-        ),
+      where: e.sent_at > ^oldest_cutoff,
       select: e.sent_at
     )
     |> repo.all()
@@ -76,13 +78,13 @@ defmodule Throttler.Policy do
 
   defp allowed_to_send?(now, timestamps, limits) do
     Enum.all?(limits, fn {max_count, unit} ->
-      cutoff = DateTime.add(now, -to_seconds(unit), :second)
+      cutoff = DateTime.add(now, -to_seconds(unit, 1), :second)
       count = Enum.count(timestamps, &(DateTime.compare(&1, cutoff) == :gt))
       count < max_count
     end)
   end
 
-  defp to_seconds(:minute, n \\ 1), do: n * 60
-  defp to_seconds(:hour, n \\ 1), do: n * 3_600
-  defp to_seconds(:day, n \\ 1), do: n * 86_400
+  defp to_seconds(:minute, n), do: n * 60
+  defp to_seconds(:hour, n), do: n * 3_600
+  defp to_seconds(:day, n), do: n * 86_400
 end

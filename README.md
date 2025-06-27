@@ -26,6 +26,16 @@ end
 
 ## Schema Migrations
 
+Throttler requires two tables to store throttle state and events. You can find a migration template at `priv/repo/migrations/create_throttler_tables.exs.template`.
+
+Create a new migration in your application:
+
+```bash
+mix ecto.gen.migration create_throttler_tables
+```
+
+Then add the following to your migration:
+
 ```elixir
 create table(:throttler_throttles) do
   add :scope, :string, null: false
@@ -39,10 +49,10 @@ create unique_index(:throttler_throttles, [:scope, :key])
 create table(:throttler_events) do
   add :scope, :string, null: false
   add :key, :string, null: false
-  add :sent_at, :utc_datetime_usec
+  add :sent_at, :utc_datetime_usec, null: false
 end
 
-create index(:throttler_events, [:scope, :key])
+create index(:throttler_events, [:scope, :key, :sent_at])
 ```
 
 ## Usage
