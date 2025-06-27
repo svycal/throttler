@@ -74,10 +74,42 @@ end
 ### 2. Handle the result:
 
 ```elixir
-case MyApp.Notifications.maybe_send("user_123") do
+case MyApp.Notifications.maybe_send("user:123") do
   {:ok, :sent} -> :ok
   {:error, :throttled} -> :skip
   {:error, {:exception, e}} -> report_exception(e)
+end
+```
+
+## Global Configuration
+
+You can configure the repo globally in your application config instead of specifying it in each module:
+
+```elixir
+# config/config.exs
+config :throttler, repo: MyApp.Repo
+```
+
+Then use Throttler without specifying the repo:
+
+```elixir
+defmodule MyApp.Notifications do
+  use Throttler  # No repo: option needed!
+
+  def maybe_send(scope) do
+    throttle scope, "weekly_digest", max_per: [hour: 1, day: 3] do
+      MyMailer.send_digest(scope)
+    end
+  end
+end
+```
+
+The module-level configuration takes precedence over the global configuration if both are provided:
+
+```elixir
+# This will use MySpecialRepo, not the globally configured one
+defmodule MyApp.SpecialNotifications do
+  use Throttler, repo: MySpecialRepo
 end
 ```
 
@@ -91,7 +123,7 @@ The `throttle` block is already wrapped in a database transaction. **Do not use 
 
 ```elixir
 # ❌ AVOID THIS
-throttle "user_123", "notification", max_per: [hour: 1] do
+throttle "user:123", "notification", max_per: [hour: 1] do
   Repo.transaction(fn ->
     # This creates a nested transaction - don't do this!
     send_notification()
@@ -99,7 +131,7 @@ throttle "user_123", "notification", max_per: [hour: 1] do
 end
 
 # ✅ DO THIS INSTEAD
-throttle "user_123", "notification", max_per: [hour: 1] do
+throttle "user:123", "notification", max_per: [hour: 1] do
   # Your code runs inside a transaction already
   send_notification()
 end
@@ -113,7 +145,7 @@ Throttler exports formatter rules for the `throttle` macro. If you're using Thro
 
 ```elixir
 [
-  import_deps: [:throttler, ...your other deps],
+  import_deps: [:throttler, ...],
   # ... rest of your formatter config
 ]
 ```
@@ -121,7 +153,7 @@ Throttler exports formatter rules for the `throttle` macro. If you're using Thro
 This allows you to write:
 
 ```elixir
-throttle "user_123", "daily_report", max_per: [day: 1] do
+throttle "user:123", "daily_report", max_per: [day: 1] do
   send_report()
 end
 ```
@@ -169,17 +201,31 @@ defmodule MyApp.ThrottlerCleanupJob do
 
   @impl Oban.Worker
   def perform(_job) do
-    # Clean up events older than 30 days
-    deleted_count = Throttler.cleanup_old_events(days: 30)
+    # Clean up events older than 30 days (uses global repo)
+    deleted_count = Throttler.cleanup(days: 30)
     {:ok, %{deleted_events: deleted_count}}
   end
 end
 ```
 
+The cleanup function accepts several options:
+
+```elixir
+# Use the globally configured repo
+Throttler.cleanup(days: 7)
+Throttler.cleanup(hours: 48)
+
+# Or specify a repo explicitly
+Throttler.cleanup(repo: MyApp.Repo, days: 7)
+
+# Clean up with a specific DateTime cutoff
+cutoff = DateTime.add(DateTime.utc_now(), -7, :day)
+Throttler.cleanup(cutoff)
+```
+
 ### Cleanup Strategy
 
 - Events are only needed within the **longest configured time window**
-- `calculate_safe_cutoff/1` finds your longest limit and adds a 24-hour safety buffer
 - Cleanup functions return the number of deleted records
 - Consider running cleanup daily or weekly depending on your event volume
 
