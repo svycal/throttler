@@ -1,7 +1,7 @@
 defmodule ThrottlerCleanupTest do
   use Throttler.DataCase
 
-  describe "Throttler.cleanup_old_events/2" do
+  describe "Throttler.cleanup_old_events/2 (DateTime cutoff)" do
     test "deletes events older than cutoff time" do
       now = DateTime.utc_now()
 
@@ -46,79 +46,6 @@ defmodule ThrottlerCleanupTest do
     end
   end
 
-  describe "Throttler.cleanup_old_events/4" do
-    test "deletes old events for specific scope and key only" do
-      now = DateTime.utc_now()
-      old_time = DateTime.add(now, -48 * 60 * 60, :second)
-      cutoff = DateTime.add(now, -24 * 60 * 60, :second)
-
-      # Insert events for different scope/key combinations
-      target_event =
-        TestRepo.insert!(%Throttler.Schema.Event{
-          scope: "user_1",
-          key: "notification",
-          sent_at: old_time
-        })
-
-      other_scope_event =
-        TestRepo.insert!(%Throttler.Schema.Event{
-          scope: "user_2",
-          key: "notification",
-          sent_at: old_time
-        })
-
-      other_key_event =
-        TestRepo.insert!(%Throttler.Schema.Event{
-          scope: "user_1",
-          key: "reminder",
-          sent_at: old_time
-        })
-
-      # Clean up old events for specific scope/key
-      count = Throttler.cleanup_old_events(TestRepo, "user_1", "notification", cutoff)
-
-      # Should have deleted only 1 event
-      assert count == 1
-
-      # Verify only the target event was deleted
-      assert TestRepo.get(Throttler.Schema.Event, target_event.id) == nil
-      assert TestRepo.get(Throttler.Schema.Event, other_scope_event.id) != nil
-      assert TestRepo.get(Throttler.Schema.Event, other_key_event.id) != nil
-    end
-  end
-
-  describe "Throttler.calculate_safe_cutoff/1 (Policy level)" do
-    test "calculates cutoff based on longest time window with buffer" do
-      limits = [hour: 2, day: 1]
-      cutoff = Throttler.calculate_safe_cutoff(limits)
-
-      now = DateTime.utc_now()
-
-      # Should be approximately (1 day + 24 hour buffer) = 48 hours ago
-      expected_seconds = -(1 * 24 * 60 * 60 + 24 * 60 * 60)
-      expected_time = DateTime.add(now, expected_seconds, :second)
-
-      # Allow 5 second tolerance for test execution time
-      diff = DateTime.diff(cutoff, expected_time, :second)
-      assert abs(diff) <= 5
-    end
-
-    test "handles single limit correctly" do
-      limits = [hour: 6]
-      cutoff = Throttler.calculate_safe_cutoff(limits)
-
-      now = DateTime.utc_now()
-
-      # Should be approximately (6 hours + 24 hour buffer) = 30 hours ago
-      expected_seconds = -(6 * 60 * 60 + 24 * 60 * 60)
-      expected_time = DateTime.add(now, expected_seconds, :second)
-
-      # Allow 5 second tolerance
-      diff = DateTime.diff(cutoff, expected_time, :second)
-      assert abs(diff) <= 5
-    end
-  end
-
   describe "Throttler.cleanup_old_events/2 (keyword options)" do
     test "cleans up events using keyword options" do
       now = DateTime.utc_now()
@@ -155,16 +82,6 @@ defmodule ThrottlerCleanupTest do
       count = Throttler.cleanup_old_events(TestRepo, [])
       # Should not error
       assert count >= 0
-    end
-  end
-
-  describe "Throttler.calculate_safe_cutoff/1 (public API)" do
-    test "calculates safe cutoff for given limits" do
-      limits = [hour: 1, day: 3]
-      cutoff = Throttler.calculate_safe_cutoff(limits)
-
-      # Should return a DateTime in the past
-      assert DateTime.compare(cutoff, DateTime.utc_now()) == :lt
     end
   end
 end

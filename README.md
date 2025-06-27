@@ -174,29 +174,6 @@ defmodule MyApp.ThrottlerCleanupJob do
     {:ok, %{deleted_events: deleted_count}}
   end
 end
-
-# Schedule to run daily
-%{worker: MyApp.ThrottlerCleanupJob}
-|> Oban.insert!()
-```
-
-### Manual Cleanup Options
-
-```elixir
-# Clean up events older than specific time periods
-Throttler.cleanup_old_events(MyApp.Repo, days: 30)
-Throttler.cleanup_old_events(MyApp.Repo, hours: 48)
-Throttler.cleanup_old_events(MyApp.Repo, minutes: 120)
-
-# Calculate safe cutoff based on your actual throttle limits
-# (Adds 24-hour buffer for safety)
-limits = [hour: 1, day: 3]
-cutoff = Throttler.calculate_safe_cutoff(limits)
-Throttler.cleanup_old_events(MyApp.Repo, cutoff)
-
-# Direct cutoff time
-cutoff = DateTime.add(DateTime.utc_now(), -7 * 24 * 60 * 60, :second)
-Throttler.cleanup_old_events(MyApp.Repo, cutoff)
 ```
 
 ### Cleanup Strategy
