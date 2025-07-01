@@ -13,7 +13,7 @@ defmodule ThrottlerCleanupTest do
           scope: "test_scope",
           key: "test_key",
           # 48 hours ago
-          sent_at: DateTime.add(now, -48 * 60 * 60, :second)
+          occurred_at: DateTime.add(now, -48 * 60 * 60, :second)
         })
 
       recent_event =
@@ -21,7 +21,7 @@ defmodule ThrottlerCleanupTest do
           scope: "test_scope",
           key: "test_key",
           # 12 hours ago
-          sent_at: DateTime.add(now, -12 * 60 * 60, :second)
+          occurred_at: DateTime.add(now, -12 * 60 * 60, :second)
         })
 
       # Set cutoff to 24 hours ago
@@ -58,7 +58,7 @@ defmodule ThrottlerCleanupTest do
           scope: "test",
           key: "test",
           # 8 days ago
-          sent_at: DateTime.add(now, -8 * 24 * 60 * 60, :second)
+          occurred_at: DateTime.add(now, -8 * 24 * 60 * 60, :second)
         })
 
       # Insert recent event
@@ -67,7 +67,7 @@ defmodule ThrottlerCleanupTest do
           scope: "test",
           key: "test",
           # 3 days ago
-          sent_at: DateTime.add(now, -3 * 24 * 60 * 60, :second)
+          occurred_at: DateTime.add(now, -3 * 24 * 60 * 60, :second)
         })
 
       # Clean up events older than 7 days

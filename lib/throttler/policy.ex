@@ -31,10 +31,10 @@ defmodule Throttler.Policy do
     repo.insert!(%Throttler.Schema.Event{
       scope: scope,
       key: key,
-      sent_at: now
+      occurred_at: now
     })
 
-    repo.update!(Ecto.Changeset.change(throttle, last_sent_at: now))
+    repo.update!(Ecto.Changeset.change(throttle, last_occurred_at: now))
 
     try do
       fun.()
@@ -49,7 +49,7 @@ defmodule Throttler.Policy do
            %Throttler.Schema.Throttle{
              scope: scope,
              key: key,
-             last_sent_at: nil
+             last_occurred_at: nil
            },
            on_conflict: :nothing,
            conflict_target: [:scope, :key],
@@ -81,8 +81,8 @@ defmodule Throttler.Policy do
 
     from(e in Throttler.Schema.Event,
       where: e.scope == ^scope and e.key == ^key,
-      where: e.sent_at > ^oldest_cutoff,
-      select: e.sent_at
+      where: e.occurred_at > ^oldest_cutoff,
+      select: e.occurred_at
     )
     |> repo.all()
   end

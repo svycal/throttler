@@ -6,6 +6,6 @@ defmodule Throttler.Schema.Event do
   schema "throttler_events" do
     field :scope, :string
     field :key, :string
-    field :sent_at, :utc_datetime_usec
+    field :occurred_at, :utc_datetime_usec
   end
 end

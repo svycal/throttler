@@ -144,7 +144,7 @@ defmodule Throttler do
     import Ecto.Query
 
     {count, _} =
-      from(e in Throttler.Schema.Event, where: e.sent_at < ^cutoff_time)
+      from(e in Throttler.Schema.Event, where: e.occurred_at < ^cutoff_time)
       |> repo.delete_all()
 
     count

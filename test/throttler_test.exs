@@ -42,7 +42,7 @@ defmodule ThrottlerTest do
       TestRepo.insert!(%Throttler.Schema.Event{
         scope: "user_3",
         key: "test_event",
-        sent_at: past_time
+        occurred_at: past_time
       })
 
       # Should allow execution since past the 1 hour window
@@ -88,14 +88,14 @@ defmodule ThrottlerTest do
         scope: "user_7",
         key: "multi_limit",
         # 2 hours ago
-        sent_at: DateTime.add(now, -7200, :second)
+        occurred_at: DateTime.add(now, -7200, :second)
       })
 
       TestRepo.insert!(%Throttler.Schema.Event{
         scope: "user_7",
         key: "multi_limit",
         # 30 minutes ago
-        sent_at: DateTime.add(now, -1800, :second)
+        occurred_at: DateTime.add(now, -1800, :second)
       })
 
       opts = [max_per: [hour: 1, day: 3]]
@@ -147,10 +147,10 @@ defmodule ThrottlerTest do
       assert throttle != nil
       assert throttle.scope == "user_11"
       assert throttle.key == "new_event"
-      assert throttle.last_sent_at != nil
+      assert throttle.last_occurred_at != nil
     end
 
-    test "updates last_sent_at on successful send" do
+    test "updates last_occurred_at on successful send" do
       # First send
       TestModule.send_with_throttle("user_12", "update_test", max_per: [hour: 10])
       throttle1 = TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_12", key: "update_test")
@@ -162,10 +162,10 @@ defmodule ThrottlerTest do
       TestModule.send_with_throttle("user_12", "update_test", max_per: [hour: 10])
       throttle2 = TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_12", key: "update_test")
 
-      assert DateTime.compare(throttle2.last_sent_at, throttle1.last_sent_at) == :gt
+      assert DateTime.compare(throttle2.last_occurred_at, throttle1.last_occurred_at) == :gt
     end
 
-    test "does not update last_sent_at when throttled" do
+    test "does not update last_occurred_at when throttled" do
       # First send
       TestModule.send_with_throttle("user_13", "no_update_test", max_per: [hour: 1])
 
@@ -181,7 +181,7 @@ defmodule ThrottlerTest do
       throttle2 =
         TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_13", key: "no_update_test")
 
-      assert DateTime.compare(throttle2.last_sent_at, throttle1.last_sent_at) == :eq
+      assert DateTime.compare(throttle2.last_occurred_at, throttle1.last_occurred_at) == :eq
     end
   end
 
@@ -235,7 +235,7 @@ defmodule ThrottlerTest do
       TestRepo.insert!(%Throttler.Schema.Event{
         scope: "cleanup_test",
         key: "old_event",
-        sent_at: old_time
+        occurred_at: old_time
       })
 
       # Clean up using global config
@@ -255,7 +255,7 @@ defmodule ThrottlerTest do
       TestRepo.insert!(%Throttler.Schema.Event{
         scope: "cleanup_test2",
         key: "old_event",
-        sent_at: old_time
+        occurred_at: old_time
       })
 
       # Clean up with explicit repo
@@ -276,7 +276,7 @@ defmodule ThrottlerTest do
       TestRepo.insert!(%Throttler.Schema.Event{
         scope: "cleanup_test3",
         key: "old_event",
-        sent_at: old_time
+        occurred_at: old_time
       })
 
       # Clean up using global config
@@ -293,7 +293,7 @@ defmodule ThrottlerTest do
       TestRepo.insert!(%Throttler.Schema.Event{
         scope: "cleanup_test4",
         key: "old_event",
-        sent_at: old_time
+        occurred_at: old_time
       })
 
       # Clean up with explicit repo
@@ -322,7 +322,7 @@ defmodule ThrottlerTest do
 
       event = TestRepo.get_by(Throttler.Schema.Event, scope: "user_14", key: "track_test")
       assert event != nil
-      assert event.sent_at != nil
+      assert event.occurred_at != nil
     end
 
     test "does not create event when throttled" do
@@ -354,11 +354,11 @@ defmodule ThrottlerTest do
         DateTime.add(now, -1_800, :second)
       ]
 
-      Enum.each(events, fn sent_at ->
+      Enum.each(events, fn occurred_at ->
         TestRepo.insert!(%Throttler.Schema.Event{
           scope: "user_16",
           key: "window_test",
-          sent_at: sent_at
+          occurred_at: occurred_at
         })
       end)
 
