@@ -5,7 +5,7 @@ defmodule Throttler.Policy do
 
   def run(repo, scope, key, opts, fun) do
     force = Keyword.get(opts, :force, false)
-    
+
     if force do
       # When force is true, always execute the function
       case repo.transaction(fn -> execute_forced(repo, scope, key, fun) end) do
@@ -15,7 +15,7 @@ defmodule Throttler.Policy do
     else
       # Normal throttling behavior
       max_per = Keyword.fetch!(opts, :max_per)
-      
+
       case repo.transaction(fn -> run_throttle_check(repo, scope, key, max_per, fun) end) do
         {:ok, result} -> result
         {:error, reason} -> {:error, reason}
@@ -26,10 +26,10 @@ defmodule Throttler.Policy do
   defp execute_forced(repo, scope, key, fun) do
     # Get or create throttle record
     _throttle = get_or_create_throttle!(repo, scope, key)
-    
+
     # Get the throttle with a lock to ensure proper ID is loaded
     throttle = from(t in throttle_query(scope, key), lock: "FOR UPDATE") |> repo.one!()
-    
+
     # Execute and record the event
     now = DateTime.utc_now()
     execute_and_record(repo, scope, key, throttle, now, fun)
@@ -43,7 +43,7 @@ defmodule Throttler.Policy do
     now = DateTime.utc_now()
     recent = fetch_recent_events(repo, scope, key, max_per)
 
-    if allowed_to_send?(now, recent, max_per) do
+    if allowed_to_execute?(now, recent, max_per) do
       execute_and_record(repo, scope, key, throttle, now, fun)
     else
       repo.rollback(:throttled)
@@ -110,7 +110,7 @@ defmodule Throttler.Policy do
     |> repo.all()
   end
 
-  defp allowed_to_send?(now, timestamps, limits) do
+  defp allowed_to_execute?(now, timestamps, limits) do
     Enum.all?(limits, fn {unit, max_count} ->
       cutoff = DateTime.add(now, -to_seconds(unit, 1), :second)
       count = Enum.count(timestamps, &(DateTime.compare(&1, cutoff) == :gt))
