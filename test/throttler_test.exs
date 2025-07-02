@@ -341,64 +341,83 @@ defmodule ThrottlerTest do
   describe "force option" do
     test "executes block even when throttle limit reached" do
       # First send - should succeed
-      assert {:ok, :sent} = TestModule.send_with_throttle("user_force_1", "force_test", max_per: [hour: 1])
-      
+      assert {:ok, :sent} =
+               TestModule.send_with_throttle("user_force_1", "force_test", max_per: [hour: 1])
+
       # Second send without force - should be throttled
-      assert {:error, :throttled} = TestModule.send_with_throttle("user_force_1", "force_test", max_per: [hour: 1])
-      
+      assert {:error, :throttled} =
+               TestModule.send_with_throttle("user_force_1", "force_test", max_per: [hour: 1])
+
       # Third send with force - should succeed despite throttle
-      assert {:ok, :sent} = TestModule.send_with_throttle("user_force_1", "force_test", max_per: [hour: 1], force: true)
+      assert {:ok, :sent} =
+               TestModule.send_with_throttle("user_force_1", "force_test",
+                 max_per: [hour: 1],
+                 force: true
+               )
     end
-    
+
     test "records event when force is true" do
       # Send with force
-      TestModule.send_with_throttle("user_force_2", "force_event", max_per: [hour: 1], force: true)
-      
+      TestModule.send_with_throttle("user_force_2", "force_event",
+        max_per: [hour: 1],
+        force: true
+      )
+
       # Check that event was recorded
       event = TestRepo.get_by(Throttler.Schema.Event, scope: "user_force_2", key: "force_event")
       assert event != nil
       assert event.occurred_at != nil
     end
-    
+
     test "updates throttle record when force is true" do
       # Send with force
-      TestModule.send_with_throttle("user_force_3", "force_update", max_per: [hour: 1], force: true)
-      
+      TestModule.send_with_throttle("user_force_3", "force_update",
+        max_per: [hour: 1],
+        force: true
+      )
+
       # Check that throttle was updated
-      throttle = TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_force_3", key: "force_update")
+      throttle =
+        TestRepo.get_by(Throttler.Schema.Throttle, scope: "user_force_3", key: "force_update")
+
       assert throttle != nil
       assert throttle.last_occurred_at != nil
     end
-    
+
     test "allows multiple forced sends without limit" do
       opts = [max_per: [hour: 1], force: true]
-      
+
       # Should be able to send multiple times with force
       assert {:ok, :sent} = TestModule.send_with_throttle("user_force_4", "multi_force", opts)
       assert {:ok, :sent} = TestModule.send_with_throttle("user_force_4", "multi_force", opts)
       assert {:ok, :sent} = TestModule.send_with_throttle("user_force_4", "multi_force", opts)
-      
+
       # Verify all events were recorded
-      events = TestRepo.all(
-        from e in Throttler.Schema.Event,
-        where: e.scope == "user_force_4" and e.key == "multi_force"
-      )
+      events =
+        TestRepo.all(
+          from e in Throttler.Schema.Event,
+            where: e.scope == "user_force_4" and e.key == "multi_force"
+        )
+
       assert length(events) == 3
     end
-    
+
     test "handles errors in forced execution" do
-      result = TestModule.send_with_error("user_force_5", "force_error", max_per: [hour: 1], force: true)
+      result =
+        TestModule.send_with_error("user_force_5", "force_error", max_per: [hour: 1], force: true)
+
       assert {:error, {:exception, %RuntimeError{message: "Test error"}}} = result
-      
+
       # Should not have created event due to rollback
       event = TestRepo.get_by(Throttler.Schema.Event, scope: "user_force_5", key: "force_error")
       assert event == nil
     end
-    
+
     test "force option works without max_per" do
       # When force is true, max_per is not required
-      assert {:ok, :sent} = TestModule.send_with_throttle("user_force_6", "no_max_per", force: true)
-      
+      assert {:ok, :sent} =
+               TestModule.send_with_throttle("user_force_6", "no_max_per", force: true)
+
       # Verify event was created
       event = TestRepo.get_by(Throttler.Schema.Event, scope: "user_force_6", key: "no_max_per")
       assert event != nil
