@@ -504,7 +504,8 @@ defmodule ThrottlerTest do
       # The mock always returns 2024-01-01 12:00:00Z
       # Insert an event that would be within the window with real time but outside with mock time
       mock_now = Throttler.MockDateTime.utc_now()
-      past_event_time = DateTime.add(mock_now, -3700, :second)  # 61+ minutes ago from mock time
+      # 61+ minutes ago from mock time
+      past_event_time = DateTime.add(mock_now, -3700, :second)
 
       TestRepo.insert!(%Throttler.Schema.Event{
         scope: "user_dt_1",
@@ -522,7 +523,7 @@ defmodule ThrottlerTest do
 
       # The mock always returns 2024-01-01 12:00:00Z
       mock_now = Throttler.MockDateTime.utc_now()
-      
+
       # Insert events relative to mock time
       old_event_time = DateTime.add(mock_now, -8, :day)
       recent_event_time = DateTime.add(mock_now, -6, :day)
@@ -541,10 +542,12 @@ defmodule ThrottlerTest do
 
       # Clean up events older than 7 days (from mock time)
       deleted_count = Throttler.cleanup(days: 7)
-      
+
       assert deleted_count == 1
       assert nil == TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_dt", key: "old_event")
-      assert TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_dt", key: "recent_event") != nil
+
+      assert TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_dt", key: "recent_event") !=
+               nil
     end
   end
 end
