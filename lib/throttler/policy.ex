@@ -8,18 +8,18 @@ defmodule Throttler.Policy do
 
     if force do
       # When force is true, always execute the function
-      case repo.transaction(fn -> execute_forced(repo, scope, key, fun) end) do
-        {:ok, result} -> result
-        {:error, reason} -> {:error, reason}
-      end
+      run_with_transaction(repo, fn -> execute_forced(repo, scope, key, fun) end)
     else
       # Normal throttling behavior
       max_per = Keyword.fetch!(opts, :max_per)
+      run_with_transaction(repo, fn -> run_throttle_check(repo, scope, key, max_per, fun) end)
+    end
+  end
 
-      case repo.transaction(fn -> run_throttle_check(repo, scope, key, max_per, fun) end) do
-        {:ok, result} -> result
-        {:error, reason} -> {:error, reason}
-      end
+  defp run_with_transaction(repo, transaction_fun) do
+    case repo.transaction(transaction_fun) do
+      {:ok, result} -> result
+      {:error, reason} -> {:error, reason}
     end
   end
 
