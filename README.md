@@ -113,6 +113,30 @@ defmodule MyApp.SpecialNotifications do
 end
 ```
 
+## DateTime Module Configuration
+
+For testing purposes, you can configure a custom DateTime module to mock time-related functions:
+
+```elixir
+# config/test.exs
+config :throttler, date_time_module: MyApp.MockDateTime
+```
+
+Your mock module should implement `utc_now/0`, `add/3`, and `compare/2` functions compatible with Elixir's DateTime module:
+
+```elixir
+defmodule MyApp.MockDateTime do
+  def utc_now, do: ~U[2024-01-01 12:00:00.000000Z]
+  def add(datetime, amount, unit), do: DateTime.add(datetime, amount, unit)
+  def compare(dt1, dt2), do: DateTime.compare(dt1, dt2)
+end
+```
+
+This is particularly useful for:
+- Testing time-sensitive throttling behavior
+- Ensuring deterministic test results
+- Simulating specific time scenarios
+
 ## Safety
 
 All logic is wrapped in a Postgres transaction and uses `SELECT FOR UPDATE` to prevent race conditions across parallel processes or nodes.

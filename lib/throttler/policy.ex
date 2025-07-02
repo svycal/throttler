@@ -31,7 +31,8 @@ defmodule Throttler.Policy do
     throttle = from(t in throttle_query(scope, key), lock: "FOR UPDATE") |> repo.one!()
 
     # Execute and record the event
-    now = DateTime.utc_now()
+    date_time_module = Throttler.get_date_time_module()
+    now = date_time_module.utc_now()
     execute_and_record(repo, scope, key, throttle, now, fun)
   end
 
@@ -40,10 +41,11 @@ defmodule Throttler.Policy do
 
     throttle = from(t in throttle_query(scope, key), lock: "FOR UPDATE") |> repo.one!()
 
-    now = DateTime.utc_now()
+    date_time_module = Throttler.get_date_time_module()
+    now = date_time_module.utc_now()
     recent = fetch_recent_events(repo, scope, key, max_per)
 
-    if allowed_to_execute?(now, recent, max_per) do
+    if allowed_to_execute?(now, recent, max_per, date_time_module) do
       execute_and_record(repo, scope, key, throttle, now, fun)
     else
       repo.rollback(:throttled)
@@ -90,17 +92,18 @@ defmodule Throttler.Policy do
   end
 
   defp fetch_recent_events(repo, scope, key, limits) do
-    now = DateTime.utc_now()
+    date_time_module = Throttler.get_date_time_module()
+    now = date_time_module.utc_now()
 
     windows =
       Enum.map(limits, fn {unit, n} ->
-        {unit, n, DateTime.add(now, -(to_seconds(unit, 1) * n), :second)}
+        {unit, n, date_time_module.add(now, -(to_seconds(unit, 1) * n), :second)}
       end)
 
     oldest_cutoff =
       windows
       |> Enum.map(fn {_, _, cutoff} -> cutoff end)
-      |> Enum.min(DateTime)
+      |> Enum.min(date_time_module)
 
     from(e in Throttler.Schema.Event,
       where: e.scope == ^scope and e.key == ^key,
@@ -110,10 +113,10 @@ defmodule Throttler.Policy do
     |> repo.all()
   end
 
-  defp allowed_to_execute?(now, timestamps, limits) do
+  defp allowed_to_execute?(now, timestamps, limits, date_time_module) do
     Enum.all?(limits, fn {unit, max_count} ->
-      cutoff = DateTime.add(now, -to_seconds(unit, 1), :second)
-      count = Enum.count(timestamps, &(DateTime.compare(&1, cutoff) == :gt))
+      cutoff = date_time_module.add(now, -to_seconds(unit, 1), :second)
+      count = Enum.count(timestamps, &(date_time_module.compare(&1, cutoff) == :gt))
       count < max_count
     end)
   end

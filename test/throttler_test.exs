@@ -1,5 +1,6 @@
 defmodule ThrottlerTest do
   use Throttler.DataCase
+  import Ecto.Query
 
   defmodule TestModule do
     @moduledoc false
@@ -456,6 +457,94 @@ defmodule ThrottlerTest do
 
       # Now should be throttled (3 events in last hour)
       assert {:error, :throttled} = TestModule.send_with_throttle("user_16", "window_test", opts)
+    end
+  end
+
+  describe "date_time_module configuration" do
+    setup do
+      # Store original configs
+      original_dt_config = Application.get_env(:throttler, :date_time_module)
+      original_repo_config = Application.get_env(:throttler, :repo)
+
+      # Ensure repo is configured for tests that use global config
+      Application.put_env(:throttler, :repo, Throttler.TestRepo)
+
+      on_exit(fn ->
+        # Restore original configs
+        if original_dt_config do
+          Application.put_env(:throttler, :date_time_module, original_dt_config)
+        else
+          Application.delete_env(:throttler, :date_time_module)
+        end
+
+        if original_repo_config do
+          Application.put_env(:throttler, :repo, original_repo_config)
+        else
+          Application.delete_env(:throttler, :repo)
+        end
+      end)
+
+      :ok
+    end
+
+    test "uses DateTime by default" do
+      Application.delete_env(:throttler, :date_time_module)
+      assert Throttler.get_date_time_module() == DateTime
+    end
+
+    test "uses configured module when set" do
+      Application.put_env(:throttler, :date_time_module, Throttler.MockDateTime)
+      assert Throttler.get_date_time_module() == Throttler.MockDateTime
+    end
+
+    test "throttling uses configured date_time_module" do
+      # Configure to use mock
+      Application.put_env(:throttler, :date_time_module, Throttler.MockDateTime)
+
+      # The mock always returns 2024-01-01 12:00:00Z
+      # Insert an event that would be within the window with real time but outside with mock time
+      mock_now = Throttler.MockDateTime.utc_now()
+      past_event_time = DateTime.add(mock_now, -3700, :second)  # 61+ minutes ago from mock time
+
+      TestRepo.insert!(%Throttler.Schema.Event{
+        scope: "user_dt_1",
+        key: "dt_test",
+        occurred_at: past_event_time
+      })
+
+      # Should allow execution since the event is outside the 1-hour window
+      assert {:ok, :sent} =
+               TestModule.send_with_throttle("user_dt_1", "dt_test", max_per: [hour: 1])
+    end
+
+    test "cleanup uses configured date_time_module" do
+      Application.put_env(:throttler, :date_time_module, Throttler.MockDateTime)
+
+      # The mock always returns 2024-01-01 12:00:00Z
+      mock_now = Throttler.MockDateTime.utc_now()
+      
+      # Insert events relative to mock time
+      old_event_time = DateTime.add(mock_now, -8, :day)
+      recent_event_time = DateTime.add(mock_now, -6, :day)
+
+      TestRepo.insert!(%Throttler.Schema.Event{
+        scope: "cleanup_dt",
+        key: "old_event",
+        occurred_at: old_event_time
+      })
+
+      TestRepo.insert!(%Throttler.Schema.Event{
+        scope: "cleanup_dt",
+        key: "recent_event",
+        occurred_at: recent_event_time
+      })
+
+      # Clean up events older than 7 days (from mock time)
+      deleted_count = Throttler.cleanup(days: 7)
+      
+      assert deleted_count == 1
+      assert nil == TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_dt", key: "old_event")
+      assert TestRepo.get_by(Throttler.Schema.Event, scope: "cleanup_dt", key: "recent_event") != nil
     end
   end
 end

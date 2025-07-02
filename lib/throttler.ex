@@ -44,6 +44,17 @@ defmodule Throttler do
 
   When `force: true` is set, the block will always execute regardless of
   throttle limits. The event will still be recorded for tracking purposes.
+
+  ## DateTime Module Configuration
+
+  You can configure a custom DateTime module for testing purposes:
+
+      # config/test.exs
+      config :throttler, date_time_module: MyApp.MockDateTime
+
+  This allows you to mock time-related functions in tests. The module must
+  implement `utc_now/0`, `add/3`, and `compare/2` functions compatible with
+  Elixir's DateTime module.
   """
 
   defmacro __using__(opts) do
@@ -106,6 +117,20 @@ defmodule Throttler do
   end
 
   @doc """
+  Returns the configured DateTime module.
+
+  The DateTime module can be configured in your application config:
+
+      config :throttler, date_time_module: MyApp.MockDateTime
+
+  If no module is configured, defaults to Elixir's DateTime module.
+  This is primarily useful for testing with mocked time values.
+  """
+  def get_date_time_module do
+    Application.get_env(:throttler, :date_time_module, DateTime)
+  end
+
+  @doc """
   Cleans up old throttle events that are no longer needed.
 
   This function should be called periodically to prevent the throttler_events
@@ -162,13 +187,14 @@ defmodule Throttler do
   end
 
   defp calculate_cutoff_from_opts(opts) do
-    now = DateTime.utc_now()
+    date_time_module = get_date_time_module()
+    now = date_time_module.utc_now()
 
     cond do
-      days = opts[:days] -> DateTime.add(now, -days, :day)
-      hours = opts[:hours] -> DateTime.add(now, -hours, :hour)
-      minutes = opts[:minutes] -> DateTime.add(now, -minutes, :minute)
-      true -> DateTime.add(now, -7, :day)
+      days = opts[:days] -> date_time_module.add(now, -days, :day)
+      hours = opts[:hours] -> date_time_module.add(now, -hours, :hour)
+      minutes = opts[:minutes] -> date_time_module.add(now, -minutes, :minute)
+      true -> date_time_module.add(now, -7, :day)
     end
   end
 end
