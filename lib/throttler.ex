@@ -33,6 +33,17 @@ defmodule Throttler do
           end
         end
       end
+
+  ## Force Option
+
+  You can bypass throttling by passing `force: true`:
+
+      throttle scope, "digest", max_per: [hour: 1], force: true do
+        send_digest_email(scope)
+      end
+
+  When `force: true` is set, the block will always execute regardless of
+  throttle limits. The event will still be recorded for tracking purposes.
   """
 
   defmacro __using__(opts) do

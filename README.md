@@ -176,6 +176,35 @@ Supported time units: `:minute`, `:hour`, `:day`
 
 The most restrictive limit will be enforced. For example, if you have `[hour: 10, day: 20]` and 10 events have already been sent in the last hour, further attempts will be throttled even if the daily limit hasn't been reached.
 
+### Force Option
+
+You can bypass throttling limits by passing `force: true`. This is useful for critical operations that must execute regardless of throttle limits:
+
+```elixir
+# Normal throttling - respects limits
+throttle "user:123", "newsletter", max_per: [day: 1] do
+  send_newsletter()
+end
+
+# Force execution - always runs
+throttle "user:123", "newsletter", max_per: [day: 1], force: true do
+  send_urgent_security_alert()  # This will always execute
+end
+```
+
+When `force: true` is set:
+- The block will **always execute** regardless of throttle limits
+- The event is still recorded in the database for tracking
+- The `last_occurred_at` timestamp is updated
+- Useful for admin overrides, critical alerts, or testing
+
+```elixir
+case MyApp.maybe_notify(user_id, force: admin_override?) do
+  {:ok, :sent} -> Logger.info("Notification sent")
+  {:error, :throttled} -> Logger.info("Throttled (won't happen with force: true)")
+end
+```
+
 ### Scope and Key
 
 You can use any string for `scope` and `key`. Examples:

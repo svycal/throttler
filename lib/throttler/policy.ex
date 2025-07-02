@@ -4,12 +4,35 @@ defmodule Throttler.Policy do
   import Ecto.Query
 
   def run(repo, scope, key, opts, fun) do
-    max_per = Keyword.fetch!(opts, :max_per)
-
-    case repo.transaction(fn -> run_throttle_check(repo, scope, key, max_per, fun) end) do
-      {:ok, result} -> result
-      {:error, reason} -> {:error, reason}
+    force = Keyword.get(opts, :force, false)
+    
+    if force do
+      # When force is true, always execute the function
+      case repo.transaction(fn -> execute_forced(repo, scope, key, fun) end) do
+        {:ok, result} -> result
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      # Normal throttling behavior
+      max_per = Keyword.fetch!(opts, :max_per)
+      
+      case repo.transaction(fn -> run_throttle_check(repo, scope, key, max_per, fun) end) do
+        {:ok, result} -> result
+        {:error, reason} -> {:error, reason}
+      end
     end
+  end
+
+  defp execute_forced(repo, scope, key, fun) do
+    # Get or create throttle record
+    _throttle = get_or_create_throttle!(repo, scope, key)
+    
+    # Get the throttle with a lock to ensure proper ID is loaded
+    throttle = from(t in throttle_query(scope, key), lock: "FOR UPDATE") |> repo.one!()
+    
+    # Execute and record the event
+    now = DateTime.utc_now()
+    execute_and_record(repo, scope, key, throttle, now, fun)
   end
 
   defp run_throttle_check(repo, scope, key, max_per, fun) do
